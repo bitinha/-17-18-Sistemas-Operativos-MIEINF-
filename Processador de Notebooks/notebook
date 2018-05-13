@@ -1,0 +1,8 @@
+$ ls -l
+LOsad sada
+$| sort
+$| head -3
+$ ls 
+$| cat
+$| head -2
+$6| head -1
