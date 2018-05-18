@@ -7,127 +7,10 @@
 #include <math.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include "readline.h"
+#include "stringlist.h"
 
 #define TAM 4*1024
-
-struct buffer_t{
-    int fd;
-    char* buf;
-    size_t nbyte, porler;
-    int cursor;
-};
-
-int create_buffer(int fildes, struct buffer_t *buffer, size_t nbyte){
-    buffer->buf = malloc(sizeof(char)*nbyte);
-
-    buffer->fd = fildes;
-    buffer->cursor = nbyte;
-    buffer->nbyte = nbyte;
-    buffer->porler = 0;
-}
-
-int destroy_buffer(struct buffer_t *buffer){
-    free(buffer->buf);
-}
-
-/** Carrega em buf uma string com a a proxima linha do descritor de ficheiro associado ao buffer
-    A string é terminada com '/n' e NULL
-    Devolve o número de caracteres lidos para o buffer, incluindo '\n' e '\0'
-*/
-ssize_t readln(struct buffer_t *buffer, char **buf){
-
-    int i=0;
-
-    if(buffer->porler==0){                  // Se já não houver caracteres para ler no buffer, ler os proximos bytes para o buffer
-        buffer->porler = read(buffer->fd, buffer->buf, buffer->nbyte);
-        buffer->cursor = 0;
-    }
-
-    if (buffer->porler == 0) return 0;      // Devolve 0 caso o read anterior tenha devolvido 0
-
-    char *ret = malloc(sizeof(char)*buffer->nbyte);
-    int tamret = buffer->nbyte;
-
-    while(buffer->porler != 0 && buffer->buf[buffer->cursor] != '\n'){
-        ret[i++] = buffer->buf[buffer->cursor++];
-        buffer->porler--;
-
-
-        if(tamret==i){
-            tamret *= 2;
-            ret = realloc(ret, tamret);
-        }
-
-        if(buffer->porler==0){
-            buffer->porler = read(buffer->fd, buffer->buf, buffer->nbyte);
-            buffer->cursor = 0;
-        }
-    }
-
-    if(tamret <= i+2){
-        tamret += 2;
-        ret = realloc(ret,tamret);
-    }
-
-    ret[i++] = '\n';
-    ret[i++] = 0;
-
-    *buf = ret;
-
-    buffer->cursor++;
-    if(buffer->porler > 0) buffer->porler--;
-
-    return i;
-}
-
-
-struct resultado{
-    char *resultado;
-    int tamanho;
-};
-
-
-typedef struct lista_resultados{
-    struct resultado *resultados;
-    int nresultados;
-} *LRES;
-
-LRES create_lista_resultados(int n){
-    LRES output = (LRES) malloc(sizeof(struct lista_resultados));
-    output->nresultados = n;
-    output->resultados = (struct resultado *) malloc(sizeof(struct resultado)*n);
-
-    for(int i = 0; i < n; i++){
-        output->resultados[i].resultado = NULL;
-        output->resultados[i].tamanho = 0;
-    }
-
-    return output;
-}
-
-void destroy_lista_resultados(LRES output){
-    for(int i = 0; i < output->nresultados; i++){
-        free(output->resultados[i].resultado);
-    }
-
-    free(output->resultados);
-    free(output);
-}
-
-
-void adiciona_resultado(LRES output, int id, char *temp, int lido){
-    while(output->nresultados <= id){
-        output->nresultados *= 2;
-        output->resultados = realloc(output->resultados, sizeof(struct resultado)*output->nresultados);
-        for(int i = (output->nresultados)/2; i < output->nresultados; i++){
-            output->resultados[i].resultado = NULL;
-            output->resultados[i].tamanho = 0;
-        }
-    }
-
-    output->resultados[id].resultado = strndup(temp,lido);
-    output->resultados[id].tamanho = lido;
-}
 
 
 /** Devolve o ñº de processos criados*/
@@ -167,7 +50,9 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
                 int ptemp[2];
                 pipe(ptemp);
                 dup2(ptemp[0],0);
-                write(ptemp[1], output->resultados[(*nprocessos)-p].resultado, output->resultados[(*nprocessos)-p].tamanho);
+                char *res_ant;
+                int tam_res_ant = busca_resultado(output, (*nprocessos)-p, &res_ant);
+                write(ptemp[1], res_ant, tam_res_ant);
                 close(ptemp[1]);
                 close(ptemp[0]);
             }
