@@ -20,7 +20,7 @@ void interromper(int s){
 
 void executa_programas(char *linha){
 
-    int npipes = 0;
+    int npipes = 0, pid;
 
     for(int i = 0; linha[i]; i++){
         if(linha[i] == '|') npipes++;
@@ -35,15 +35,17 @@ void executa_programas(char *linha){
     }
 
     int pfds[npipes][2];
+
     //Cria as pipes necessárias
     for(int i = 0; i<npipes; i++){
-        pipe(pfds[i]);
+        if(pipe(pfds[i]) == -1) kill(0, SIGINT);
     }
 
     char *comando = strsep(&linha,"|");
 
     // Criação de um processo para executar o 1º programa que irá ler do stdin e escrever no 1º pipeline
-    if(!fork()){
+    pid = fork();
+    if(!pid){
         close(pfds[0][0]);
         dup2(pfds[0][1],1);
         close(pfds[0][1]);
@@ -51,6 +53,7 @@ void executa_programas(char *linha){
         execvp(words.we_wordv[0], words.we_wordv);
         kill(0,SIGINT);
     }
+    if(pid<0) kill(0, SIGINT);
 
     
     // O primeiro processo é o único que escreveria no 1º pipeline, por isso fecha-se para os restantes processos
@@ -60,7 +63,8 @@ void executa_programas(char *linha){
     // Ciclo que irá criar os processos que irão ler de um pipeline e escrever no seguinte
     for(int i = 1; i < npipes; i++){
         comando = strsep(&linha,"|");
-        if(!fork()){
+        pid = fork();
+        if(!pid){
             dup2(pfds[i-1][0],0);
             close(pfds[i-1][0]);
             dup2(pfds[i][1],1);
@@ -69,6 +73,7 @@ void executa_programas(char *linha){
             execvp(words.we_wordv[0], words.we_wordv);
             kill(0,SIGINT);
         }
+        if(pid<0) kill(0, SIGINT);
         close(pfds[i-1][0]);
         close(pfds[i][1]);
     }
@@ -123,7 +128,9 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
         (*nprocessos)++;
         pipe(pfds);
 
-        if(!fork()){
+        int pid = fork();
+
+        if(!pid){
             dup2(pfds[1],1);
             if(p>=1){
                 int ptemp[2];
@@ -139,6 +146,9 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
             close(pfds[0]);
             executa_programas(linha_mod);
         }
+
+        if(pid<0) kill(0,SIGINT);
+
         close(pfds[1]);
 
     }
