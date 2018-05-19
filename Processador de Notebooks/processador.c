@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <wordexp.h>
 #include <fcntl.h>
-#include <math.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "readline.h"
@@ -12,20 +11,100 @@
 
 #define TAM 4*1024
 
+char *pathsave;
 
-/** Devolve o ñº de processos criados*/
+void interromper(int s){
+    unlink(pathsave);
+    exit(1);
+}
+
+void executa_programas(char *linha){
+
+    int npipes = 0;
+
+    for(int i = 0; linha[i]; i++){
+        if(linha[i] == '|') npipes++;
+    }
+
+    wordexp_t words;
+
+    if(npipes==0){
+        wordexp(linha, &words, 0);
+        execvp(words.we_wordv[0], words.we_wordv);
+        kill(0,SIGINT);
+    }
+
+    int pfds[npipes][2];
+    //Cria as pipes necessárias
+    for(int i = 0; i<npipes; i++){
+        pipe(pfds[i]);
+    }
+
+    char *comando = strsep(&linha,"|");
+
+    // Criação de um processo para executar o 1º programa que irá ler do stdin e escrever no 1º pipeline
+    if(!fork()){
+        close(pfds[0][0]);
+        dup2(pfds[0][1],1);
+        close(pfds[0][1]);
+        wordexp(comando, &words, 0);
+        execvp(words.we_wordv[0], words.we_wordv);
+        kill(0,SIGINT);
+    }
+
+    
+    // O primeiro processo é o único que escreveria no 1º pipeline, por isso fecha-se para os restantes processos
+    close(pfds[0][1]);
+
+
+    // Ciclo que irá criar os processos que irão ler de um pipeline e escrever no seguinte
+    for(int i = 1; i < npipes; i++){
+        comando = strsep(&linha,"|");
+        if(!fork()){
+            dup2(pfds[i-1][0],0);
+            close(pfds[i-1][0]);
+            dup2(pfds[i][1],1);
+            close(pfds[i][1]);
+            wordexp(comando, &words, 0);
+            execvp(words.we_wordv[0], words.we_wordv);
+            kill(0,SIGINT);
+        }
+        close(pfds[i-1][0]);
+        close(pfds[i][1]);
+    }
+
+    
+    // Último processo (pai de todos os outros) irá executar o último programa que irá ler do último pipeline e escrever no stdout
+    dup2(pfds[npipes-1][0],0);
+    close(pfds[npipes-1][0]);
+    comando = strsep(&linha,"|");
+    wordexp(comando, &words, 0);
+    execvp(words.we_wordv[0], words.we_wordv);
+    kill(0,SIGINT);
+
+
+}
+
+/** Devolve o nº de processos criados*/
 int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
 
-    int i, r=0, p=0, tamint=0;
+    int i, r=0, p=0, tamint=0, overhead=1;
 
 
     if(linha[0] == '$'){
 
-        if(linha[1]=='|') p=1;
-        else if(p=atoi(linha+1)){
+        if(linha[1]=='|'){              //Verifica se este comando deve ir buscar o resultado do ultimo
+            p=1;
+            overhead=2;
+        }
+        else if(p=atoi(linha+1)){       //Verifica se este comando deve ir buscar o resultado doutro comando
             if(p>0){
                 tamint=snprintf(NULL,0,"%d",p);
-                if(linha[1 + tamint] != '|') p = 0; 
+                if(linha[1 + tamint] != '|'){
+                    p = 0; 
+                }else{
+                    overhead += tamint + 1;
+                }
             }
             else p = 0;
         }
@@ -35,10 +114,10 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
         //         linha[i]=' ';
         //     }
         // }
-        linha[strlen(linha)-1]=0;
 
-        wordexp_t words;
-        wordexp(linha+2+tamint, &words, 0);
+        char *linha_mod = strdup(linha+overhead);
+        linha_mod[strlen(linha_mod)-1]=0;       //Substitui \n por \0
+
 
         r++;
         (*nprocessos)++;
@@ -58,10 +137,9 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
             }
             close(pfds[1]);
             close(pfds[0]);
-            execvp(words.we_wordv[0], words.we_wordv);
+            executa_programas(linha_mod);
         }
         close(pfds[1]);
-        wordfree(&words);
 
     }
 
@@ -85,13 +163,16 @@ int main(int argc, char const *argv[]){
     struct stat sb;
     if(fstat(notebook,&sb) == -1) exit(2);
 
-    char *pathsave = malloc(strlen(argv[1])+6);      // ".temp"(6 bytes)
+    pathsave = malloc(strlen(argv[1])+6);      // ".temp"(6 bytes)
     strcpy(pathsave, argv[1]);
     strcat(pathsave, ".temp");
     if((nsave=creat(pathsave, sb.st_mode)) == -1){
         perror("Não foi possível abrir o ficheiro");
         exit(2);
     }
+
+    signal(SIGINT, interromper);
+
 
     char *linha = NULL;
     size_t len = 0;

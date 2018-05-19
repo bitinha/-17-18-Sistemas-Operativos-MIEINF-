@@ -1,58 +1,10 @@
 $ ls -l
->>>
-total 48
--rwxrwxr-x 1 vitor vitor 19192 Mai 17 20:21 main
--rw-rw-r-- 1 vitor vitor  5115 Mai 17 20:18 main.c
--rw-rw-r-- 1 vitor vitor    44 Mai 17 20:06 Makefile
--rw-rw-r-- 1 vitor vitor  1212 Mai 17 20:21 notebook
--rw-rw-r-- 1 vitor vitor     8 Mai 17 20:21 notebook.temp
--rw-rw-r-- 1 vitor vitor  1700 Mai 17 20:21 readline.c
--rw-rw-r-- 1 vitor vitor   281 Mai 17 20:21 readline.h
-<<<
-LOsad sada
+Comentario
 $| sort
->>>
--rw-rw-r-- 1 vitor vitor  1212 Mai 17 20:21 notebook
--rw-rw-r-- 1 vitor vitor  1700 Mai 17 20:21 readline.c
--rw-rw-r-- 1 vitor vitor   281 Mai 17 20:21 readline.h
--rw-rw-r-- 1 vitor vitor    44 Mai 17 20:06 Makefile
--rw-rw-r-- 1 vitor vitor  5115 Mai 17 20:18 main.c
--rw-rw-r-- 1 vitor vitor     8 Mai 17 20:21 notebook.temp
--rwxrwxr-x 1 vitor vitor 19192 Mai 17 20:21 main
-total 48
-<<<
-$| head -3
->>>
--rw-rw-r-- 1 vitor vitor  1212 Mai 17 20:21 notebook
--rw-rw-r-- 1 vitor vitor  1700 Mai 17 20:21 readline.c
--rw-rw-r-- 1 vitor vitor   281 Mai 17 20:21 readline.h
-<<<
+$ ps xao pid,ppid,pgid,sid,comm | head -5 | nl
 $ ls 
->>>
-main
-main.c
-Makefile
-notebook
-notebook.temp
-readline.c
-readline.h
-<<<
 $| cat
->>>
-main
-main.c
-Makefile
-notebook
-notebook.temp
-readline.c
-readline.h
-<<<
 $| head -2
->>>
-main
-main.c
-<<<
+
+Vai buscar o resultado de ls -l
 $6| head -1
->>>
-total 48
-<<<
