@@ -1,10 +1,11 @@
 $ ls -l
 Comentario
 $| sort
-$ ps xao pid,ppid,pgid,sid,comm | head -5 | nl
+$ ps xao pid,ppid,pgid,sid,comm  | head -5 | nl
+$| cat
 $ ls 
 $| cat
 $| head -2
 
 Vai buscar o resultado de ls -l
-$6| head -1
+$7| head -1

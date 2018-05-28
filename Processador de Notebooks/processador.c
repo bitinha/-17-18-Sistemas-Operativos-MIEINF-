@@ -10,17 +10,18 @@
 #include "stringlist.h"
 
 #define TAM 4*1024
-
+//alterar para que apenas se faça kill no pai em todos os filhos e apenas o pai trate de fechar
 char *pathsave;
 
 void interromper(int s){
     unlink(pathsave);
-    exit(1);
+    _exit(-1);
 }
 
-void executa_programas(char *linha){
+//Devolve 0 em caso de sucesso
+int executa_programas(char *linha){
 
-    int npipes = 0, pid;
+    int npipes = 0, pid, res;
 
     for(int i = 0; linha[i]; i++){
         if(linha[i] == '|') npipes++;
@@ -28,17 +29,29 @@ void executa_programas(char *linha){
 
     wordexp_t words;
 
-    if(npipes==0){
-        wordexp(linha, &words, 0);
-        execvp(words.we_wordv[0], words.we_wordv);
-        kill(0,SIGINT);
+    if(npipes==0){      //Caso em que se executa apenas um comando
+        pid=fork();
+        if(!pid){
+            wordexp(linha, &words, 0);
+            execvp(words.we_wordv[0], words.we_wordv);
+            _exit(-1);
+        }
+        if(pid<0) return -1;
+
+        wait(&res);
+        if (WIFEXITED(res)){
+            res = WEXITSTATUS(res);
+            return res;
+        }else return -1;
     }
 
     int pfds[npipes][2];
+    int num_proc = npipes + 1;      //Número de processos a serem criados
+    int pid_list[num_proc];         //Array com os pids dos processos criados
 
     //Cria as pipes necessárias
     for(int i = 0; i<npipes; i++){
-        if(pipe(pfds[i]) == -1) kill(0, SIGINT);
+        if(pipe(pfds[i]) == -1) return -1;
     }
 
     char *comando = strsep(&linha,"|");
@@ -51,13 +64,13 @@ void executa_programas(char *linha){
         close(pfds[0][1]);
         wordexp(comando, &words, 0);
         execvp(words.we_wordv[0], words.we_wordv);
-        kill(0,SIGINT);
+        _exit(-1);
     }
-    if(pid<0) kill(0, SIGINT);
-
-    
     // O primeiro processo é o único que escreveria no 1º pipeline, por isso fecha-se para os restantes processos
     close(pfds[0][1]);
+
+    if(pid<0) return -1;
+    pid_list[0]=pid;
 
 
     // Ciclo que irá criar os processos que irão ler de um pipeline e escrever no seguinte
@@ -71,26 +84,60 @@ void executa_programas(char *linha){
             close(pfds[i][1]);
             wordexp(comando, &words, 0);
             execvp(words.we_wordv[0], words.we_wordv);
-            kill(0,SIGINT);
+            _exit(-1);
         }
-        if(pid<0) kill(0, SIGINT);
+        if(pid<0){
+            for(int j=0;j<i;j++){       //KILL NOS PROCESSOS JÁ CRIADOS
+                kill(pid_list[j],SIGKILL);
+            }
+            return -1;
+        }
+        pid_list[i] = pid;              //ADICIONA PID A LISTA
         close(pfds[i-1][0]);
         close(pfds[i][1]);
     }
 
-    
-    // Último processo (pai de todos os outros) irá executar o último programa que irá ler do último pipeline e escrever no stdout
-    dup2(pfds[npipes-1][0],0);
-    close(pfds[npipes-1][0]);
-    comando = strsep(&linha,"|");
-    wordexp(comando, &words, 0);
-    execvp(words.we_wordv[0], words.we_wordv);
-    kill(0,SIGINT);
+    pid = fork();
+    // Último processo a ser criado irá executar o último programa que irá ler do último pipeline e escrever no stdout
+    if(!pid){
+        dup2(pfds[npipes-1][0],0);
+        close(pfds[npipes-1][0]);
+        comando = strsep(&linha,"|");
+        wordexp(comando, &words, 0);
+        execvp(words.we_wordv[0], words.we_wordv);
+        _exit(-1);
+    }
+    if(pid<0){
+        for(int j=0;j<num_proc-1;j++){      //KILL NOS PROCESSOS JÁ CRIADOS
+            kill(pid_list[j],SIGKILL);
+        }
+        return -1;
+    }
+    pid_list[num_proc-1] = pid;         //ADICIONA PID A LISTA
 
+    for(int i=0; i<num_proc; i++){
+        waitpid(pid_list[i], &res, 0);
+        if (WIFEXITED(res)){
+            res = WEXITSTATUS(res);
+            if(res!=0){
+                for(int j = i+1; j<num_proc; j++){        //Mata o resto
+                    kill(pid_list[j], SIGKILL);
+                }
+                return -1;
+            }
+        }else{
+            for(int j = i+1; j<num_proc; j++){        //Mata o resto
+                kill(pid_list[j], SIGKILL);
+            }
+            return -1;
+        }
+    }
+
+    return 0;
 
 }
 
-/** Devolve o nº de processos criados*/
+/** Devolve 0 caso existessem comandos para executar, 1 caso os comandos tenham sido executados com sucesso e -1 caso ocorresse algum erro*/
 int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
 
     int i, r=0, p=0, tamint=0, overhead=1;
@@ -113,12 +160,6 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
             }
             else p = 0;
         }
-        // for (i = 0; linha[i]!='\n' && linha[i] != 0; ++i){
-        //     char c = linha[i];
-        //     if(c=='|' || c=='&' || c==';' || c=='<' || c=='>' || c=='(' || c==')' || c=='{' || c=='}'){
-        //         linha[i]=' ';
-        //     }
-        // }
 
         char *linha_mod = strdup(linha+overhead);
         linha_mod[strlen(linha_mod)-1]=0;       //Substitui \n por \0
@@ -129,6 +170,7 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
         pipe(pfds);
 
         int pid = fork();
+        
 
         if(!pid){
             dup2(pfds[1],1);
@@ -144,12 +186,22 @@ int processa_linha(char *linha, int pfds[2], int *nprocessos, LRES output){
             }
             close(pfds[1]);
             close(pfds[0]);
-            executa_programas(linha_mod);
+            int resexec = executa_programas(linha_mod);
+            _exit(resexec);
         }
 
-        if(pid<0) kill(0,SIGINT);
-
         close(pfds[1]);
+
+        if(pid<0) return -1;
+
+
+        wait(&r);
+        if (WIFEXITED(r)){
+            r = WEXITSTATUS(r);
+            printf("%d\n", r);
+            if(r!=0) return -1;
+            else return 1;
+        }else return -1;
 
     }
 
@@ -206,8 +258,8 @@ int main(int argc, char const *argv[]){
             while((len = readln(&buffer, &linha))!=0 && strcmp(linha, "<<<\n")) free(linha);
         }else{
             write(nsave, linha, len-1);
-            if(processa_linha(linha, pfds, &processos, output) > 0){
-                wait(NULL);
+            int rproc = processa_linha(linha, pfds, &processos, output);
+            if(rproc == 1){
                 for(lido = read(pfds[0], temp, tamtemp); lido == tamtemp; lido += read(pfds[0], temp + (tamtemp/2), tamtemp/2)){
                     tamtemp *= 2;
                     temp = realloc(temp, tamtemp);
@@ -217,6 +269,9 @@ int main(int argc, char const *argv[]){
                 write(nsave, ">>>\n", 4);
                 write(nsave, temp, lido);
                 write(nsave, "<<<\n", 4);
+            }
+            else if(rproc == -1){
+                interromper(SIGINT);
             }
         }
     free(linha);
