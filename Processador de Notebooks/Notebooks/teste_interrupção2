@@ -1,0 +1,6 @@
+$ ls -l
+Comentario
+$| sort
+
+$| cat | cat | cat | ./naotermina | cat | cat
+

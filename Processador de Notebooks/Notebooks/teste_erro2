@@ -1,0 +1,4 @@
+$ ls -l
+
+Ao encontrar o 1º erro, todos os processos irão terminar
+$| sort | nl | cat < redirecionamento não é suportado | ./naotermina | ps la
