@@ -20,13 +20,15 @@ struct fila{
 char *pathsave;
 struct fila processos_criados;
 
-
+//Função que irá matar qualquer processo criado pelo programa
 void mata_processos(){
     while(processos_criados.proximo < processos_criados.existentes){
         kill(processos_criados.elementos[processos_criados.proximo++], SIGKILL);
     }
+    free(processos_criados.elementos);
 }
 
+//Função que trata do desfecho do programa em caso de erro
 void interromper(int s){
     unlink(pathsave);
     mata_processos();
@@ -132,7 +134,6 @@ int executa_programas(char *linha, char *res_ant, int tam_res_ant){
             _exit(-1);
         }
         if(pid<0){
-            mata_processos();       //KILL NOS PROCESSOS JÁ CRIADOS
             return -1;
         }
         processos_criados.elementos[processos_criados.existentes++] = pid;//ADICIONA PID A LISTA
@@ -157,7 +158,6 @@ int executa_programas(char *linha, char *res_ant, int tam_res_ant){
     }
     close(pipe_resultado[1]);
     if(pid<0){
-        mata_processos();      //KILL NOS PROCESSOS JÁ CRIADOS
         return -1;
     }
     processos_criados.elementos[processos_criados.existentes++] = pid;         //ADICIONA PID A LISTA
@@ -220,6 +220,8 @@ int processa_linha(char *linha, int *ncomando, LRES output){
         }
 
         int fd = executa_programas(linha_mod, res_ant, tam_res_ant);
+        if(fd!=-1) free(processos_criados.elementos);
+        free(linha_mod);
         return fd;
     }
 

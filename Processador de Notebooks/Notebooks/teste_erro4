@@ -1,7 +1,7 @@
 $ ls -l
 Comentario
 $| sort
-$ ps la | grep pipe_w | nl
+$ ps xao pid,ppid,pgid,sid,comm  | head -5 | erro | sleep 60 | nl
 $| cat
 $ ls 
 $| cat

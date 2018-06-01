@@ -2,7 +2,7 @@ CC = gcc
 OBJS = processador.o readline.o stringlist.o
 
 program: $(OBJS) naotermina
-	$(CC) -o processador $(OBJS) -g -Wall
+	$(CC) -o notebook $(OBJS) -g -Wall
 
 processador.o readline.o : readline.h 
 
@@ -12,4 +12,4 @@ naotermina :
 	$(CC) naotermina.c -o naotermina
 
 clean:
-	rm processador *.o naotermina
+	rm notebook *.o naotermina
