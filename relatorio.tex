@@ -1,0 +1,63 @@
+\documentclass[a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[portuges]{babel}
+\usepackage{a4wide}
+
+\title{Projeto de Sistemas Operativos\\Grupo 37}
+\author{Álvaro Silva (a54280) \and Miguel Brandão (a82349) \and Vítor Gomes (a75362)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+
+\tableofcontents
+
+\section{Introdução}
+\label{sec:intro}
+
+O objetivo deste trabalho era o desenvolvimento de um programa capaz de processar um ficheiro de texto que mistura código, resultados e documentação utilizando as ferramentas adquiridas na UC de Sistemas Operativos. O processamento deve modificar o ficheiro de texto, adicionando os resultados da execução do código.
+
+O resultado deste projeto é um programa capaz de executar os comandos de um ficheiro e escrever nele os seus resultados, apagando os resultados de uma execução anterior. Estes comandos podem receber, como input, o resultado de qualquer linha de comandos executada anteriormente e estas linhas de comando ainda podem ser compostas por vários comandos ligados por pipelines. No caso de erro ou interrupção do programa, este irá manter o notebook inalterado e matar qualquer processo dos comandos que poderiam estar a ser executados nesse momento.
+
+\section{Funcionalidades do programa desenvolvido}
+\label{sec:func}
+
+
+\subsection{Execução de programas e re-processamento de notebooks}
+
+Para o processamento do ficheiro recebido como parâmetro do programa, o programa abre o ficheiro e vai lendo cada linha, usando o módulo criado \texttt{readline.h}. As linhas serão processadas, sendo que, os resultados de execução serão ignorados, os comentários serão escritos num novo ficheiro, assim como os comandos e os seus resultados.
+Para obter o resultado dos programas a executar, a linha que contêm o comando a executar é passada como argumento a uma função, \texttt{executa\_programas()}, que irá tratar de criar um processo que a execute, devolvendo o descritor de ficheiro de onde se pode ler o resultado da execução.
+No fim do processamento de todas as linhas, o novo ficheiro irá substituir o original.
+
+\subsection{Acesso a resultados de comandos anteriores arbitrários}
+
+Para que o programa fosse capaz de utilizar resultados de execuções anteriores foi criada uma estrutura, definida em \texttt{stringlist.h}, onde se armazena o resultado de cada comando executado. Este resultado é armazenado lendo do descritor de ficheiro devolvido pela função \texttt{executa\_programas()}.
+É a esta estrutura que se vai buscar o resultado de cada comando para escrever no ficheiro de texto e para enviar como input de um comando. Para obter este último efeito, a linha de código é analisada para descobrir qual o resultado a ir buscar, esse resultado é obtido através da estrutura e passado como argumento à função \texttt{executa\_programas()} que depois é escrito num pipe de onde o comando a executar o vai ler.
+
+\subsection{Execução de conjuntos de comandos}
+
+Uma linha de comando do notebook pode conter pipelines, para resolver este problema é criado um array com o tamanho de pipes necessárias (nº de comandos - 1), este array é composto de arrays para 2 inteiros que armazenam os descritores de ficheiro para ler e escrever num pipe. Estes pipes irão tratar de toda a comunicação entre os processos que irão executar os comandos pedidos, sendo que o 1º processo irá ler o que seria lido caso fosse executado apenas um comando e escrever para o 1º pipe e o último processo irá ler do último pipe e devolver o descritor de ficheiro de onde se poderá ler o resultado final.
+Desta implementação resulta que estes comandos dentro dessa linha poderão ser executados concorrentemente, sendo apenas escrito como resultado, o resultado do último comando.
+
+Para testar esta implementação foi usado o notebook \texttt{teste1} onde é possível verificar os processos no pipeline a correrem simultaneamente.
+
+\subsection{Deteção de erros e interrupção da execução}
+
+Sempre que algum dos comandos não possa ser executado ou tenha algum erro na sua execução, todo programa irá terminar e o notebook ficará inalterado, o mesmo acontece quando o utilizador interrompe o processamento com \texttt{\^{}C}. Para este efeito, sempre que um novo processo é criado, é guardado o seu PID num array global. Assim, quando é detetado algum erro na execução de um comando ou uma interrupção pelo teclado, é executada uma função que mata todos os processos filho existentes e apaga o ficheiro que estava a ser criado para substituir o original (o nome do ficheiro também é armazenado numa variável global para este efeito).
+
+Para testar o caso em que aconteça algum erro foi criado o notebook \texttt{teste\_erro4} que contém uma linha com vários comandos a executar, um deles irá causar um erro enquanto alguns programas ainda  estarão em execução \texttt{(sleep 60)}, este erro termina o processamento do notebook e é possível verificar nenhum processo sobreviveu.
+
+Para testar o caso em que o programa é interrompido pelo teclado, foi criado um programa que não termina e ignora \texttt{SIGINT}. Nos testes \texttt{teste\_interrupção}, este programa foi utilizado e é possível verificar que ao interromper o programa com \texttt{\^{}C}, o noteboook mantém-se inalterado e os processos a executarem o programa \texttt{naotermina} não sobrevivem.
+
+\section{Conclusões}
+\label{sec:conclusao}
+
+O programa resultante deste projeto é um programa capaz de cumprir
+todas as funcionalidades básicas pedidas pelo enunciado, acrescentando ainda
+as funcionalidades avançadas: acesso a resultados de comandos anteriores arbitrários
+e execução de comandos com pipelines.
+
+\end{document}
