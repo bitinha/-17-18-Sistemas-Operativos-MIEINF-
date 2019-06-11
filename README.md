@@ -1,2 +1,3 @@
 # SO2018
-SIstemas Operativos 2018
+Sistemas Operativos 2018
+18 valores
